@@ -1,0 +1,342 @@
+""""
+Riemann Zeros vs Particle Masses: Complete Test Code
+Tests the hypothesis that particle masses correlate with Riemann zeta function
+zero positions when scaled by the fine structure constant divided by 100.
+Author: Ethan (framework) & computational implementation
+Date: December 2024
+License: MIT - Free for academic/research use
+Requirements:
+    pip install mpmath numpy scipy
+Expected runtime: ~5-10 minutes for 1000 zeros
+"""
+import numpy as np
+from mpmath import mp, zetazero
+import json
+from datetime import datetime
+# Set high precision for Riemann zero calculation
+mp.dps = 50  # 50 decimal places
+def calculate_riemann_zeros(n_zeros=1000):
+    """
+    Calculate first n Riemann zeta function zeros
+    
+    These are values t where ζ(1/2 + it) = 0
+    We extract the imaginary parts.
+    
+    Args:
+        n_zeros: Number of zeros to calculate
+        
+    Returns:
+        List of imaginary parts of zeros
+    """
+    print(f"Calculating first {n_zeros} Riemann zeros...")
+    print("This may take several minutes...")
+    
+    zeros = []
+    for n in range(1, n_zeros + 1):
+        zero = zetazero(n)
+        zeros.append(float(zero.imag))
+        
+        if n % 100 == 0:
+            print(f"  Calculated {n}/{n_zeros} zeros...")
+    
+    print(f"✓ Calculated {len(zeros)} zeros")
+    print(f"  Range: {zeros[0]:.2f} to {zeros[-1]:.2f}")
+    
+    return zeros
+def get_particle_database():
+    """
+    Standard Model particle masses in MeV
+    Source: Particle Data Group (PDG) 2024
+    
+    Returns:
+        Dictionary of particle properties
+    """
+    return {
+        # Leptons (fundamental fermions)
+        'electron': {'mass': 0.5110, 'type': 'Lepton', 'subtype': 'Charged'},
+        'muon': {'mass': 105.6584, 'type': 'Lepton', 'subtype': 'Charged'},
+        'tau': {'mass': 1776.8600, 'type': 'Lepton', 'subtype': 'Charged'},
+        'electron_neutrino': {'mass': 0.0000, 'type': 'Lepton', 'subtype': 'Neutral'},
+        'muon_neutrino': {'mass': 0.1700, 'type': 'Lepton', 'subtype': 'Neutral'},
+        'tau_neutrino': {'mass': 15.5000, 'type': 'Lepton', 'subtype': 'Neutral'},
+        
+        # Quarks (fundamental fermions, "current" masses)
+        'up': {'mass': 2.2000, 'type': 'Quark', 'subtype': 'Up-type'},
+        'down': {'mass': 4.7000, 'type': 'Quark', 'subtype': 'Down-type'},
+        'charm': {'mass': 1275.0000, 'type': 'Quark', 'subtype': 'Up-type'},
+        'strange': {'mass': 95.0000, 'type': 'Quark', 'subtype': 'Down-type'},
+        'top': {'mass': 173210.0000, 'type': 'Quark', 'subtype': 'Up-type'},
+        'bottom': {'mass': 4180.0000, 'type': 'Quark', 'subtype': 'Down-type'},
+        
+        # Gauge Bosons (force carriers)
+        'W_boson': {'mass': 80379.0000, 'type': 'Boson', 'subtype': 'Gauge'},
+        'Z_boson': {'mass': 91187.6000, 'type': 'Boson', 'subtype': 'Gauge'},
+        'Higgs': {'mass': 125100.0000, 'type': 'Boson', 'subtype': 'Scalar'},
+        
+        # Baryons (3-quark bound states)
+        'proton': {'mass': 938.2721, 'type': 'Baryon', 'subtype': 'Nucleon'},
+        'neutron': {'mass': 939.5654, 'type': 'Baryon', 'subtype': 'Nucleon'},
+        'lambda': {'mass': 1115.6830, 'type': 'Baryon', 'subtype': 'Strange'},
+        'sigma_plus': {'mass': 1189.3700, 'type': 'Baryon', 'subtype': 'Strange'},
+        'sigma_zero': {'mass': 1192.6420, 'type': 'Baryon', 'subtype': 'Strange'},
+        'sigma_minus': {'mass': 1197.4490, 'type': 'Baryon', 'subtype': 'Strange'},
+        'xi_zero': {'mass': 1314.8600, 'type': 'Baryon', 'subtype': 'Strange'},
+        'xi_minus': {'mass': 1321.7100, 'type': 'Baryon', 'subtype': 'Strange'},
+        'omega': {'mass': 1672.4500, 'type': 'Baryon', 'subtype': 'Strange'},
+        
+        # Mesons (quark-antiquark bound states)
+        'pion_charged': {'mass': 139.5704, 'type': 'Meson', 'subtype': 'Light'},
+        'pion_neutral': {'mass': 134.9768, 'type': 'Meson', 'subtype': 'Light'},
+        'kaon_charged': {'mass': 493.6770, 'type': 'Meson', 'subtype': 'Strange'},
+        'kaon_neutral': {'mass': 497.6110, 'type': 'Meson', 'subtype': 'Strange'},
+        'eta': {'mass': 547.8620, 'type': 'Meson', 'subtype': 'Light'},
+        'rho': {'mass': 775.2600, 'type': 'Meson', 'subtype': 'Light'},
+        'omega_meson': {'mass': 782.6500, 'type': 'Meson', 'subtype': 'Light'},
+        'phi': {'mass': 1019.4610, 'type': 'Meson', 'subtype': 'Strange'},
+        'D_meson': {'mass': 1869.6500, 'type': 'Meson', 'subtype': 'Charm'},
+        'B_meson': {'mass': 5279.3400, 'type': 'Meson', 'subtype': 'Bottom'},
+    }
+def find_nearest_zero(mass_scaled, zeros):
+    """
+    Find the nearest Riemann zero to a scaled mass
+    
+    Args:
+        mass_scaled: Particle mass divided by scale factor
+        zeros: List of Riemann zero values
+        
+    Returns:
+        (index, zero_value) tuple
+    """
+    diffs = np.abs(np.array(zeros) - mass_scaled)
+    idx = np.argmin(diffs)
+    return idx, zeros[idx]
+def test_correlation(particles, zeros, scale_factor, threshold=0.01):
+    """
+    Test correlation between particle masses and Riemann zeros
+    
+    Args:
+        particles: Dictionary of particle data
+        zeros: List of Riemann zeros
+        scale_factor: Scaling factor (mass/scale = zero position)
+        threshold: Deviation threshold for "match" (default 1% = 0.01)
+        
+    Returns:
+        (matches, non_matches) tuple of lists
+    """
+    matches = []
+    non_matches = []
+    
+    for name, info in particles.items():
+        mass = info['mass']
+        
+        # Skip massless particles
+        if mass == 0:
+            continue
+        
+        # Scale the mass
+        mass_scaled = mass / scale_factor
+        
+        # Find nearest zero
+        zero_idx, nearest_zero = find_nearest_zero(mass_scaled, zeros)
+        
+        # Calculate deviation
+        deviation = abs(nearest_zero - mass_scaled) / nearest_zero
+        deviation_pct = deviation * 100
+        
+        result = {
+            'name': name,
+            'mass': mass,
+            'type': info['type'],
+            'subtype': info['subtype'],
+            'scaled_mass': mass_scaled,
+            'zero_idx': zero_idx + 1,  # 1-indexed for clarity
+            'nearest_zero': nearest_zero,
+            'deviation': deviation,
+            'deviation_pct': deviation_pct
+        }
+        
+        if deviation <= threshold:
+            matches.append(result)
+        else:
+            non_matches.append(result)
+    
+    return matches, non_matches
+def monte_carlo_validation(particles, zeros, scale_factor, threshold=0.01, n_trials=1000):
+    """
+    Monte Carlo test: how many random positions would match zeros?
+    
+    Args:
+        particles: Dictionary of particle data
+        zeros: List of Riemann zeros
+        scale_factor: Scaling factor used
+        threshold: Matching threshold
+        n_trials: Number of random trials
+        
+    Returns:
+        Statistics dictionary
+    """
+    print(f"\nRunning Monte Carlo validation ({n_trials} trials)...")
+    
+    # Get mass range
+    masses = [p['mass'] for p in particles.values() if p['mass'] > 0]
+    min_mass, max_mass = min(masses), max(masses)
+    n_particles = len(masses)
+    
+    match_counts = []
+    for trial in range(n_trials):
+        # Generate random masses in same range
+        random_masses = np.random.uniform(min_mass, max_mass, n_particles)
+        
+        # Test correlation
+        matches = 0
+        for mass in random_masses:
+            scaled = mass / scale_factor
+            _, nearest_zero = find_nearest_zero(scaled, zeros)
+            deviation = abs(nearest_zero - scaled) / nearest_zero
+            if deviation <= threshold:
+                matches += 1
+        
+        match_counts.append(matches / n_particles * 100)
+        
+        if (trial + 1) % 100 == 0:
+            print(f"  Completed {trial + 1}/{n_trials} trials...")
+    
+    match_counts = np.array(match_counts)
+    
+    return {
+        'mean': np.mean(match_counts),
+        'std': np.std(match_counts),
+        'min': np.min(match_counts),
+        'max': np.max(match_counts)
+    }
+def print_results(matches, non_matches, scale_factor, threshold):
+    """
+    Print formatted results
+    """
+    total = len(matches) + len(non_matches)
+    match_rate = len(matches) / total * 100
+    
+    print(f"\n{'='*70}")
+    print(f"RESULTS: Scale Factor = {scale_factor:.4f}, Threshold = {threshold*100}%")
+    print(f"{'='*70}")
+    print(f"Matches: {len(matches)}/{total} = {match_rate:.1f}%\n")
+    
+    print("MATCHED PARTICLES (sorted by deviation):")
+    print(f"{'Rank':<5} {'Particle':<20} {'Mass (MeV)':<12} {'Zero #':<8} {'Deviation':<10}")
+    print("-" * 70)
+    
+    matches_sorted = sorted(matches, key=lambda x: x['deviation_pct'])
+    for i, m in enumerate(matches_sorted, 1):
+        print(f"{i:<5} {m['name']:<20} {m['mass']:<12.4f} #{m['zero_idx']:<7} {m['deviation_pct']:<10.3f}%")
+    
+    print(f"\nNON-MATCHED PARTICLES:")
+    print(f"{'Rank':<5} {'Particle':<20} {'Mass (MeV)':<12} {'Deviation':<10}")
+    print("-" * 70)
+    
+    non_matches_sorted = sorted(non_matches, key=lambda x: x['deviation_pct'])
+    for i, m in enumerate(non_matches_sorted, 1):
+        print(f"{i:<5} {m['name']:<20} {m['mass']:<12.4f} {m['deviation_pct']:<10.1f}%")
+    
+    # Pattern analysis by type
+    print(f"\nPATTERN ANALYSIS BY PARTICLE TYPE:")
+    print(f"{'Type':<15} {'Matched':<10} {'Total':<10} {'Rate':<10}")
+    print("-" * 50)
+    
+    for particle_type in ['Baryon', 'Meson', 'Lepton', 'Quark', 'Boson']:
+        type_matches = [m for m in matches if m['type'] == particle_type]
+        particles_db = get_particle_database()
+        type_total = sum(1 for p in particles_db.values()
+                        if p['type'] == particle_type and p['mass'] > 0)
+        
+        if type_total > 0:
+            rate = len(type_matches) / type_total * 100
+            print(f"{particle_type:<15} {len(type_matches):<10} {type_total:<10} {rate:<10.1f}%")
+    
+    # Fine structure constant check
+    alpha_inverse = 137.036
+    scale_times_100 = scale_factor * 100
+    diff = abs(scale_times_100 - alpha_inverse)
+    diff_pct = diff / alpha_inverse * 100
+    
+    print(f"\nFINE STRUCTURE CONSTANT ANALYSIS:")
+    print(f"  Scale factor × 100 = {scale_times_100:.3f}")
+    print(f"  1/α (fine structure) = {alpha_inverse:.3f}")
+    print(f"  Difference: {diff:.3f} ({diff_pct:.2f}%)")
+    print(f"  Interpretation: Scale factor ≈ (1/α)/100")
+def main():
+    """
+    Main execution function
+    """
+    print("="*70)
+    print("RIEMANN ZEROS VS PARTICLE MASSES: CORRELATION TEST")
+    print("="*70)
+    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+    
+    # Step 1: Calculate Riemann zeros
+    n_zeros = 1000
+    zeros = calculate_riemann_zeros(n_zeros)
+    
+    # Step 2: Load particle database
+    particles = get_particle_database()
+    print(f"\nLoaded {len(particles)} particles")
+    print(f"Mass range: {min(p['mass'] for p in particles.values() if p['mass'] > 0):.4f} to "
+          f"{max(p['mass'] for p in particles.values()):.1f} MeV")
+    
+    # Step 3: Test correlation at scale factor α/100
+    # Fine structure constant: α ≈ 1/137.036
+    # Hypothesis: scale factor = (1/α) / 100 ≈ 1.37036
+    scale_factor = 137.036 / 100  # = 1.37036
+    threshold = 0.01  # 1% deviation threshold
+    
+    print(f"\nTesting at scale factor = {scale_factor:.5f}")
+    print(f"(This equals (1/α)/100 where α is fine structure constant)")
+    print(f"Threshold: {threshold*100}% deviation\n")
+    
+    matches, non_matches = test_correlation(particles, zeros, scale_factor, threshold)
+    
+    # Step 4: Print results
+    print_results(matches, non_matches, scale_factor, threshold)
+    
+    # Step 5: Statistical validation
+    mc_stats = monte_carlo_validation(particles, zeros, scale_factor, threshold, n_trials=1000)
+    
+    observed_rate = len(matches) / (len(matches) + len(non_matches)) * 100
+    z_score = (observed_rate - mc_stats['mean']) / mc_stats['std']
+    
+    print(f"\nSTATISTICAL VALIDATION (Monte Carlo, 1000 trials):")
+    print(f"  Random expectation: {mc_stats['mean']:.2f}% ± {mc_stats['std']:.2f}%")
+    print(f"  Observed correlation: {observed_rate:.2f}%")
+    print(f"  Z-score: {z_score:.2f}")
+    print(f"  Interpretation: {abs(z_score):.1f} sigma event")
+    
+    if z_score > 5:
+        print(f"  *** HIGHLY SIGNIFICANT (>5 sigma = discovery threshold) ***")
+    
+    # Step 6: Save results
+    output = {
+        'metadata': {
+            'timestamp': datetime.now().isoformat(),
+            'n_zeros': n_zeros,
+            'scale_factor': scale_factor,
+            'threshold': threshold,
+        },
+        'results': {
+            'matches': matches,
+            'non_matches': non_matches,
+            'match_rate': observed_rate,
+        },
+        'statistics': {
+            'monte_carlo': mc_stats,
+            'z_score': z_score,
+        }
+    }
+    
+    filename = 'riemann_particle_results.json'
+    with open(filename, 'w') as f:
+        json.dump(output, f, indent=2)
+    
+    print(f"\nResults saved to {filename}")
+    print(f"\nCompleted: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*70)
+if **name** == "**main**":
+    main()
